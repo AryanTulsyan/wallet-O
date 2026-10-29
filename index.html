@@ -222,7 +222,7 @@ button.add, button.spend {
 
   <div id="registerForm">
     <input type="text" id="regUsername" placeholder="Choose a username">
-    <input type="password" id="regPin" placeholder="Choose a 4-digit PIN">
+    <input type="password" id="regPin" placeholder="Choose a 6-digit PIN">
     <button id="regBtn">Create Account</button>
     <div class="auth-error" id="regError"></div>
     <div class="switch-link">Already have an account? <a id="showLoginLink">Login</a></div>
@@ -301,7 +301,7 @@ button.add, button.spend {
 <script>
 // ===== FIREBASE INITIALIZATION =====
 const firebaseConfig = {
- apiKey: "AIzaSyCEpWJtYwHeei3wgtv4d_yfTfKvE_EaeS8",
+  apiKey: "AIzaSyCEpWJtYwHeei3wgtv4d_yfTfKvE_EaeS8",
   authDomain: "wallet-8a2ce.firebaseapp.com",
   projectId: "wallet-8a2ce",
   storageBucket: "wallet-8a2ce.firebasestorage.app",
@@ -309,6 +309,7 @@ const firebaseConfig = {
   appId: "1:411590071354:web:7515fde5f16430d9895103",
   measurementId: "G-081BQGRF1H"
   };
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -357,7 +358,9 @@ function register() {
   errEl.innerText = "";
 
   if (!username) { errEl.innerText = "Please enter a username."; return; }
-  if (!/^\d{4}$/.test(pin)) { errEl.innerText = "PIN must be exactly 4 digits."; return; }
+  
+  // Requires 6 digits to satisfy Firebase's 6-character minimum password rule
+  if (!/^\d{6}$/.test(pin)) { errEl.innerText = "PIN must be exactly 6 digits."; return; }
 
   let email = username + "@mywallet.app";
 
