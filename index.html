@@ -151,6 +151,12 @@ body {
 
 .detail-header h2 { margin: 0; font-size: 22px; }
 
+.delete-wallet-btn {
+  background: #f8dddd; color: #5c1414; padding: 6px 12px;
+  font-size: 12px; border-radius: 8px; cursor: pointer; border: none;
+  font-weight: 600;
+}
+
 .balance-card {
   margin-top: 20px; padding: 25px 20px; border-radius: 20px;
   text-align: center; background: #f0f2f5;
@@ -260,6 +266,7 @@ button.add, button.spend {
   <div class="detail-header">
     <button class="back-btn" id="backBtn">← Back</button>
     <h2 id="walletName"></h2>
+    <button class="delete-wallet-btn" id="deleteWalletBtn">Delete Wallet</button>
   </div>
 
   <div class="balance-card">
@@ -350,6 +357,15 @@ async function getWallet(id) {
   return wallets.find(w => w.id === id);
 }
 
+async function deleteWalletFromCloud() {
+  if (!currentUser || !currentWalletId) return;
+  if (!confirm("Are you sure you want to delete this wallet and all its transactions?")) return;
+
+  await db.collection("users").doc(currentUser).collection("wallets").doc(currentWalletId).delete();
+  currentWalletId = null;
+  showDashboard();
+}
+
 // ===== AUTH (FIREBASE) =====
 function register() {
   let username = document.getElementById("regUsername").value.trim().toLowerCase();
@@ -358,8 +374,6 @@ function register() {
   errEl.innerText = "";
 
   if (!username) { errEl.innerText = "Please enter a username."; return; }
-  
-  // Requires 6 digits to satisfy Firebase's 6-character minimum password rule
   if (!/^\d{6}$/.test(pin)) { errEl.innerText = "PIN must be exactly 6 digits."; return; }
 
   let email = username + "@mywallet.app";
@@ -536,8 +550,6 @@ async function spendMoney() {
   if (!note) { alert("Please enter a note."); return; }
 
   let wallet = await getWallet(currentWalletId);
-  if (amount > wallet.balance) { alert("Insufficient balance."); return; }
-
   wallet.balance -= amount;
   wallet.transactions.push({ type: "spend", note, amount, sign: "-", timestamp: Date.now() });
   await saveWalletToCloud(wallet);
@@ -586,6 +598,7 @@ document.getElementById("logoutBtn").addEventListener("click", logout);
 document.getElementById("showLoginLink").addEventListener("click", showLogin);
 document.getElementById("showRegisterLink").addEventListener("click", showRegister);
 document.getElementById("backBtn").addEventListener("click", showDashboard);
+document.getElementById("deleteWalletBtn").addEventListener("click", deleteWalletFromCloud);
 document.getElementById("addMoneyBtn").addEventListener("click", addMoney);
 document.getElementById("spendMoneyBtn").addEventListener("click", spendMoney);
 document.getElementById("fab").addEventListener("click", openNewWalletModal);
