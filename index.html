@@ -7,6 +7,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#ffffff">
 <title>My Wallet</title>
+
+<!-- ===== FIREBASE SDK (Compat Version) ===== -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 <style>
 * { box-sizing: border-box; }
 
@@ -293,36 +299,66 @@ button.add, button.spend {
 </div>
 
 <script>
+// ===== FIREBASE INITIALIZATION =====
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 // ===== STATE =====
-let currentUser = localStorage.getItem("walletCurrentUser") || null;
-let users = JSON.parse(localStorage.getItem("walletUsers")) || [];
+let currentUser = null;
 let currentWalletId = null;
 
-// ===== STORAGE HELPERS =====
-function getUserKey() { return "wallets_" + currentUser; }
+// Listen for Firebase Auth State Changes
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    currentUser = user.uid;
+    showDashboard();
+  } else {
+    currentUser = null;
+    showScreen("authScreen");
+  }
+});
 
-function getWallets() {
-  return JSON.parse(localStorage.getItem(getUserKey())) || [];
+// ===== CLOUD STORAGE HELPERS (FIRESTORE) =====
+async function getWallets() {
+  if (!currentUser) return [];
+  let snapshot = await db.collection("users").doc(currentUser).collection("wallets").get();
+  let wallets = [];
+  snapshot.forEach(doc => {
+    wallets.push({ id: doc.id, ...doc.data() });
+  });
+  return wallets;
 }
 
-function saveWallets(wallets) {
-  localStorage.setItem(getUserKey(), JSON.stringify(wallets));
+async function saveWalletToCloud(wallet) {
+  if (!currentUser) return;
+  await db.collection("users").doc(currentUser).collection("wallets").doc(wallet.id).set(wallet);
 }
 
-function getWallet(id) {
-  return getWallets().find(w => w.id === id);
+async function getWallet(id) {
+  let wallets = await getWallets();
+  return wallets.find(w => w.id === id);
 }
 
-function updateWallet(id, data) {
-  let wallets = getWallets();
+async function updateWalletInCloud(id, data) {
+  let wallets = await getWallets();
   let idx = wallets.findIndex(w => w.id === id);
   if (idx !== -1) {
-    wallets[idx] = { ...wallets[idx], ...data };
-    saveWallets(wallets);
+    let updatedWallet = { ...wallets[idx], ...data };
+    await saveWalletToCloud(updatedWallet);
   }
 }
 
-// ===== AUTH =====
+// ===== AUTH (FIREBASE) =====
 function register() {
   let username = document.getElementById("regUsername").value.trim().toLowerCase();
   let pin = document.getElementById("regPin").value;
@@ -331,14 +367,13 @@ function register() {
 
   if (!username) { errEl.innerText = "Please enter a username."; return; }
   if (!/^\d{4}$/.test(pin)) { errEl.innerText = "PIN must be exactly 4 digits."; return; }
-  if (users.find(u => u.username === username)) { errEl.innerText = "Username already taken."; return; }
 
-  users.push({ username, pin });
-  localStorage.setItem("walletUsers", JSON.stringify(users));
+  let email = username + "@mywallet.app";
 
-  currentUser = username;
-  localStorage.setItem("walletCurrentUser", currentUser);
-  showDashboard();
+  auth.createUserWithEmailAndPassword(email, pin)
+    .catch((error) => {
+      errEl.innerText = error.message;
+    });
 }
 
 function login() {
@@ -347,22 +382,20 @@ function login() {
   let errEl = document.getElementById("loginError");
   errEl.innerText = "";
 
-  let user = users.find(u => u.username === username);
-  if (!user) { errEl.innerText = "User not found."; return; }
-  if (user.pin !== pin) { errEl.innerText = "Incorrect PIN."; return; }
+  let email = username + "@mywallet.app";
 
-  currentUser = username;
-  localStorage.setItem("walletCurrentUser", currentUser);
-  showDashboard();
+  auth.signInWithEmailAndPassword(email, pin)
+    .catch((error) => {
+      errEl.innerText = "Incorrect username or PIN.";
+    });
 }
 
 function logout() {
-  localStorage.removeItem("walletCurrentUser");
-  currentUser = null;
-  currentWalletId = null;
-  showScreen("authScreen");
-  document.getElementById("loginUsername").value = "";
-  document.getElementById("loginPin").value = "";
+  auth.signOut().then(() => {
+    currentWalletId = null;
+    document.getElementById("loginUsername").value = "";
+    document.getElementById("loginPin").value = "";
+  });
 }
 
 function showLogin() {
@@ -389,17 +422,19 @@ function showDashboard() {
   renderDashboard();
 }
 
-function showWalletDetail(id) {
+async function showWalletDetail(id) {
   currentWalletId = id;
   showScreen("walletDetail");
-  let wallet = getWallet(id);
-  document.getElementById("walletName").innerText = wallet.name;
-  renderWalletDetail();
+  let wallet = await getWallet(id);
+  if (wallet) {
+    document.getElementById("walletName").innerText = wallet.name;
+    renderWalletDetail(wallet);
+  }
 }
 
 // ===== DASHBOARD RENDER =====
-function renderDashboard() {
-  let wallets = getWallets();
+async function renderDashboard() {
+  let wallets = await getWallets();
   let grid = document.getElementById("walletGrid");
   let emptyDash = document.getElementById("emptyDash");
   grid.innerHTML = "";
@@ -429,8 +464,10 @@ function renderDashboard() {
 }
 
 // ===== WALLET DETAIL RENDER =====
-function renderWalletDetail() {
-  let wallet = getWallet(currentWalletId);
+async function renderWalletDetail(walletArg) {
+  let wallet = walletArg || await getWallet(currentWalletId);
+  if (!wallet) return;
+
   document.getElementById("balance").innerText = "₹" + wallet.balance.toLocaleString("en-IN");
 
   let list = document.getElementById("transactionList");
@@ -480,40 +517,40 @@ function renderWalletDetail() {
 }
 
 // ===== ADD / SPEND =====
-function addMoney() {
+async function addMoney() {
   let amount = Number(document.getElementById("amount").value);
   let note = document.getElementById("note").value.trim();
 
   if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
   if (!note) { alert("Please enter a note."); return; }
 
-  let wallet = getWallet(currentWalletId);
+  let wallet = await getWallet(currentWalletId);
   wallet.balance += amount;
   wallet.transactions.push({ type: "add", note, amount, sign: "+", timestamp: Date.now() });
-  updateWallet(currentWalletId, wallet);
+  await saveWalletToCloud(wallet);
 
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
-  renderWalletDetail();
+  renderWalletDetail(wallet);
 }
 
-function spendMoney() {
+async function spendMoney() {
   let amount = Number(document.getElementById("amount").value);
   let note = document.getElementById("note").value.trim();
 
   if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
   if (!note) { alert("Please enter a note."); return; }
 
-  let wallet = getWallet(currentWalletId);
+  let wallet = await getWallet(currentWalletId);
   if (amount > wallet.balance) { alert("Insufficient balance."); return; }
 
   wallet.balance -= amount;
   wallet.transactions.push({ type: "spend", note, amount, sign: "-", timestamp: Date.now() });
-  updateWallet(currentWalletId, wallet);
+  await saveWalletToCloud(wallet);
 
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
-  renderWalletDetail();
+  renderWalletDetail(wallet);
 }
 
 // ===== CREATE WALLET (FAB + MODAL) =====
@@ -527,18 +564,18 @@ function closeModal() {
   document.getElementById("modalOverlay").style.display = "none";
 }
 
-function createWallet() {
+async function createWallet() {
   let name = document.getElementById("newWalletName").value.trim();
   if (!name) { alert("Please enter a wallet name."); return; }
 
-  let wallets = getWallets();
-  wallets.push({
+  let newWallet = {
     id: Date.now().toString(),
     name: name,
     balance: 0,
     transactions: []
-  });
-  saveWallets(wallets);
+  };
+
+  await saveWalletToCloud(newWallet);
   closeModal();
   renderDashboard();
 }
@@ -547,12 +584,7 @@ function createWallet() {
 document.getElementById("modalOverlay").addEventListener("click", function(e) {
   if (e.target === this) closeModal();
 });
-
-// ===== INIT =====
-if (currentUser) {
-  showDashboard();
-}
 </script>
 
 </body>
-</html>   
+</html>
