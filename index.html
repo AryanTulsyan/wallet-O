@@ -223,17 +223,17 @@ button.add, button.spend {
   <div id="registerForm">
     <input type="text" id="regUsername" placeholder="Choose a username">
     <input type="password" id="regPin" placeholder="Choose a 4-digit PIN">
-    <button onclick="register()">Create Account</button>
+    <button id="regBtn">Create Account</button>
     <div class="auth-error" id="regError"></div>
-    <div class="switch-link">Already have an account? <a onclick="showLogin()">Login</a></div>
+    <div class="switch-link">Already have an account? <a id="showLoginLink">Login</a></div>
   </div>
 
   <div id="loginForm" style="display:none;">
     <input type="text" id="loginUsername" placeholder="Username">
     <input type="password" id="loginPin" placeholder="PIN">
-    <button onclick="login()">Login</button>
+    <button id="loginBtn">Login</button>
     <div class="auth-error" id="loginError"></div>
-    <div class="switch-link">No account? <a onclick="showRegister()">Register</a></div>
+    <div class="switch-link">No account? <a id="showRegisterLink">Register</a></div>
   </div>
 </div>
 
@@ -241,7 +241,7 @@ button.add, button.spend {
 <div class="dashboard" id="dashboard">
   <div class="dash-header">
     <h1>My Wallets</h1>
-    <button class="logout-btn" onclick="logout()">Logout</button>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
   </div>
 
   <div class="total-balance-card">
@@ -258,7 +258,7 @@ button.add, button.spend {
 <!-- ===== WALLET DETAIL ===== -->
 <div class="wallet-detail" id="walletDetail">
   <div class="detail-header">
-    <button class="back-btn" onclick="showDashboard()">← Back</button>
+    <button class="back-btn" id="backBtn">← Back</button>
     <h2 id="walletName"></h2>
   </div>
 
@@ -272,8 +272,8 @@ button.add, button.spend {
     <input type="text" id="note" placeholder="Enter note (e.g., Grocery, Salary)">
   </div>
 
-  <button class="add" onclick="addMoney()">+ Add Money</button>
-  <button class="spend" onclick="spendMoney()">− Spend Money</button>
+  <button class="add" id="addMoneyBtn">+ Add Money</button>
+  <button class="spend" id="spendMoneyBtn">− Spend Money</button>
 
   <div class="transactions">
     <h2>Transactions</h2>
@@ -284,7 +284,7 @@ button.add, button.spend {
 </div>
 
 <!-- ===== FAB ===== -->
-<button class="fab" id="fab" onclick="openNewWalletModal()">+</button>
+<button class="fab" id="fab">+</button>
 
 <!-- ===== NEW WALLET MODAL ===== -->
 <div class="modal-overlay" id="modalOverlay">
@@ -292,27 +292,23 @@ button.add, button.spend {
     <h3>New Wallet</h3>
     <input type="text" id="newWalletName" placeholder="Wallet name (e.g., Savings, Food)">
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" onclick="createWallet()">Create</button>
+      <button class="btn-cancel" id="cancelModalBtn">Cancel</button>
+      <button class="btn-confirm" id="confirmModalBtn">Create</button>
     </div>
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
-
+<script>
 // ===== FIREBASE INITIALIZATION =====
 const firebaseConfig = {
-  apiKey: "AIzaSyCEpWJtYwHeei3wgtv4d_yfTfKvE_EaeS8",
+ apiKey: "AIzaSyCEpWJtYwHeei3wgtv4d_yfTfKvE_EaeS8",
   authDomain: "wallet-8a2ce.firebaseapp.com",
   projectId: "wallet-8a2ce",
   storageBucket: "wallet-8a2ce.firebasestorage.app",
   messagingSenderId: "411590071354",
   appId: "1:411590071354:web:7515fde5f16430d9895103",
   measurementId: "G-081BQGRF1H"
-};
-
+  };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -351,15 +347,6 @@ async function saveWalletToCloud(wallet) {
 async function getWallet(id) {
   let wallets = await getWallets();
   return wallets.find(w => w.id === id);
-}
-
-async function updateWalletInCloud(id, data) {
-  let wallets = await getWallets();
-  let idx = wallets.findIndex(w => w.id === id);
-  if (idx !== -1) {
-    let updatedWallet = { ...wallets[idx], ...data };
-    await saveWalletToCloud(updatedWallet);
-  }
 }
 
 // ===== AUTH (FIREBASE) =====
@@ -588,6 +575,19 @@ async function createWallet() {
 document.getElementById("modalOverlay").addEventListener("click", function(e) {
   if (e.target === this) closeModal();
 });
+
+// ===== EVENT LISTENERS (WIRING IT ALL UP) =====
+document.getElementById("regBtn").addEventListener("click", register);
+document.getElementById("loginBtn").addEventListener("click", login);
+document.getElementById("logoutBtn").addEventListener("click", logout);
+document.getElementById("showLoginLink").addEventListener("click", showLogin);
+document.getElementById("showRegisterLink").addEventListener("click", showRegister);
+document.getElementById("backBtn").addEventListener("click", showDashboard);
+document.getElementById("addMoneyBtn").addEventListener("click", addMoney);
+document.getElementById("spendMoneyBtn").addEventListener("click", spendMoney);
+document.getElementById("fab").addEventListener("click", openNewWalletModal);
+document.getElementById("cancelModalBtn").addEventListener("click", closeModal);
+document.getElementById("confirmModalBtn").addEventListener("click", createWallet);
 </script>
 
 </body>
