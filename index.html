@@ -128,6 +128,11 @@ button {
   color: #888;
 }
 
+.transaction-time {
+  font-size: 11px;
+  color: #aaa;
+}
+
 .added {
   color: #27ae60;
   font-weight: 600;
@@ -209,8 +214,18 @@ function updateTransactions() {
     typeSpan.className = "transaction-type";
     typeSpan.innerText = transaction.type === "add" ? "Added" : "Spent";
 
+    let timeSpan = document.createElement("span");
+    timeSpan.className = "transaction-time";
+    if (transaction.timestamp) {
+      timeSpan.innerText = new Date(transaction.timestamp).toLocaleString("en-IN", {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit"
+      });
+    }
+
     infoDiv.appendChild(noteSpan);
     infoDiv.appendChild(typeSpan);
+    infoDiv.appendChild(timeSpan);
 
     let amountSpan = document.createElement("span");
     amountSpan.innerText = transaction.sign + " ₹" + transaction.amount.toLocaleString("en-IN");
@@ -225,7 +240,7 @@ function updateTransactions() {
 function addMoney() {
   let amountInput = document.getElementById("amount");
   let noteInput = document.getElementById("note");
-  
+
   let amount = Number(amountInput.value);
   let note = noteInput.value.trim();
 
@@ -246,7 +261,8 @@ function addMoney() {
     type: "add",
     note: note,
     amount: amount,
-    sign: "+"
+    sign: "+",
+    timestamp: Date.now()
   });
 
   saveData();
@@ -260,7 +276,7 @@ function addMoney() {
 function spendMoney() {
   let amountInput = document.getElementById("amount");
   let noteInput = document.getElementById("note");
-  
+
   let amount = Number(amountInput.value);
   let note = noteInput.value.trim();
 
@@ -286,7 +302,8 @@ function spendMoney() {
     type: "spend",
     note: note,
     amount: amount,
-    sign: "-"
+    sign: "-",
+    timestamp: Date.now()
   });
 
   saveData();
@@ -307,4 +324,4 @@ updateTransactions();
 </script>
 
 </body>
-</html>
+</html>   
