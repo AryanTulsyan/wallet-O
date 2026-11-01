@@ -70,6 +70,17 @@ body {
 
 .dash-header h1 { margin: 0; font-size: 24px; }
 
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.upgrade-btn {
+  background: #fef3c7; color: #92400e; padding: 8px 12px;
+  font-size: 13px; border-radius: 8px; cursor: pointer; border: 1px solid #fde68a;
+  font-weight: 600;
+}
+
 .logout-btn {
   background: #f8dddd; color: #5c1414; padding: 8px 14px;
   font-size: 13px; border-radius: 8px; cursor: pointer; border: none;
@@ -272,7 +283,10 @@ button.add, button.spend {
 <div class="dashboard" id="dashboard">
   <div class="dash-header">
     <h1>My Wallets</h1>
-    <button class="logout-btn" id="logoutBtn">Logout</button>
+    <div class="header-buttons">
+      <button class="upgrade-btn" id="upgradeBtn">⭐ Upgrade</button>
+      <button class="logout-btn" id="logoutBtn">Logout</button>
+    </div>
   </div>
 
   <div class="total-balance-card">
@@ -342,7 +356,7 @@ const firebaseConfig = {
   messagingSenderId: "411590071354",
   appId: "1:411590071354:web:7515fde5f16430d9895103",
   measurementId: "G-081BQGRF1H"
-  };
+};
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -391,6 +405,25 @@ async function deleteWalletFromCloud() {
   await db.collection("users").doc(currentUser).collection("wallets").doc(currentWalletId).delete();
   currentWalletId = null;
   showDashboard();
+}
+
+// ===== FREEMIUM HELPERS =====
+async function isUserPremium() {
+  if (!currentUser) return false;
+  let userSnap = await db.collection("users").doc(currentUser).get();
+  return userSnap.exists && userSnap.data().isPremium === true;
+}
+
+async function upgradeAccount() {
+  if (!currentUser) return;
+  if (confirm("Would you like to upgrade to Premium to unlock unlimited wallets?")) {
+    await db.collection("users").doc(currentUser).set({
+      isPremium: true,
+      upgradedAt: Date.now()
+    }, { merge: true });
+    alert("Congratulations! You are now a Premium member.");
+    renderDashboard();
+  }
 }
 
 // ===== AUTH (FIREBASE) =====
@@ -472,7 +505,22 @@ async function renderDashboard() {
   let wallets = await getWallets();
   let grid = document.getElementById("walletGrid");
   let emptyDash = document.getElementById("emptyDash");
+  let upgradeBtn = document.getElementById("upgradeBtn");
   grid.innerHTML = "";
+
+  // Check premium status to toggle UI elements
+  let premium = await isUserPremium();
+  if (premium) {
+    upgradeBtn.innerText = "⭐ Premium Active";
+    upgradeBtn.style.background = "#dcfce7";
+    upgradeBtn.style.color = "#15803d";
+    upgradeBtn.style.borderColor = "#bbf7d0";
+  } else {
+    upgradeBtn.innerText = "⭐ Upgrade";
+    upgradeBtn.style.background = "#fef3c7";
+    upgradeBtn.style.color = "#92400e";
+    upgradeBtn.style.borderColor = "#fde68a";
+  }
 
   if (wallets.length === 0) {
     emptyDash.style.display = "block";
@@ -632,7 +680,7 @@ async function editTransaction(txId) {
   if (!tx) return;
 
   let newNote = prompt("Edit transaction note:", tx.note);
-  if (newNote === null) return; // Cancelled
+  if (newNote === null) return;
   newNote = newNote.trim();
   if (!newNote) { alert("Note cannot be empty."); return; }
 
@@ -641,11 +689,9 @@ async function editTransaction(txId) {
   let newAmount = Number(newAmountStr);
   if (!newAmount || newAmount <= 0) { alert("Please enter a valid amount."); return; }
 
-  // Update transaction details
   tx.note = newNote;
   tx.amount = newAmount;
 
-  // Recalculate wallet balance precisely from all transactions
   let computedBalance = 0;
   wallet.transactions.forEach(t => {
     if (t.type === "add") computedBalance += t.amount;
@@ -664,7 +710,6 @@ async function deleteTransaction(txId) {
   let wallet = await getWallet(currentWalletId);
   wallet.transactions = wallet.transactions.filter(t => t.id !== txId);
 
-  // Recalculate wallet balance precisely
   let computedBalance = 0;
   wallet.transactions.forEach(t => {
     if (t.type === "add") computedBalance += t.amount;
@@ -677,8 +722,19 @@ async function deleteTransaction(txId) {
   renderDashboard();
 }
 
-// ===== CREATE WALLET (FAB + MODAL) =====
-function openNewWalletModal() {
+// ===== CREATE WALLET (FAB + MODAL WITH FREEMIUM LIMIT) =====
+async function openNewWalletModal() {
+  let wallets = await getWallets();
+  let premium = await isUserPremium();
+
+  // Freemium limit enforcement: Free users get 1 wallet maximum
+  if (!premium && wallets.length >= 1) {
+    if (confirm("Free accounts are limited to 1 wallet. Would you like to upgrade to Premium for unlimited wallets?")) {
+      upgradeAccount();
+    }
+    return;
+  }
+
   document.getElementById("newWalletName").value = "";
   document.getElementById("modalOverlay").style.display = "flex";
   document.getElementById("newWalletName").focus();
@@ -709,10 +765,11 @@ document.getElementById("modalOverlay").addEventListener("click", function(e) {
   if (e.target === this) closeModal();
 });
 
-// ===== EVENT LISTENERS (WIRING IT ALL UP) =====
+// ===== EVENT LISTENERS =====
 document.getElementById("regBtn").addEventListener("click", register);
 document.getElementById("loginBtn").addEventListener("click", login);
 document.getElementById("logoutBtn").addEventListener("click", logout);
+document.getElementById("upgradeBtn").addEventListener("click", upgradeAccount);
 document.getElementById("showLoginLink").addEventListener("click", showLogin);
 document.getElementById("showRegisterLink").addEventListener("click", showRegister);
 document.getElementById("backBtn").addEventListener("click", showDashboard);
