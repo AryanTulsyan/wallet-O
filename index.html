@@ -115,7 +115,7 @@ body {
   text-align: center; color: #888; padding: 40px 20px; font-size: 15px;
 }
 
-/* ===== FAB (floating action button) ===== */
+/* ===== FAB ===== */
 .fab {
   position: fixed;
   bottom: 30px;
@@ -228,22 +228,22 @@ button.add, button.spend {
 .tx-delete-btn { color: #991b1b; background: #fee2e2; }
 .tx-delete-btn:hover { background: #fecaca; }
 
-/* ===== MODAL ===== */
+/* ===== MODAL & QR CODE ===== */
 .modal-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4); display: none;
+  background: rgba(0,0,0,0.5); display: none;
   justify-content: center; align-items: center; z-index: 200;
 }
 
 .modal {
-  background: white; border-radius: 16px; padding: 28px 24px;
-  width: 90%; max-width: 340px;
+  background: white; border-radius: 16px; padding: 24px;
+  width: 90%; max-width: 360px; text-align: center;
 }
 
-.modal h3 { margin: 0 0 16px; font-size: 18px; }
-.modal input {
-  width: 100%; padding: 13px 15px; border: 1px solid #ddd;
-  border-radius: 10px; font-size: 16px; outline: none;
+.modal h3 { margin: 0 0 12px; font-size: 20px; }
+.modal select, .modal input {
+  width: 100%; padding: 12px; border: 1px solid #ddd;
+  border-radius: 10px; font-size: 15px; outline: none; margin-top: 8px;
 }
 .modal .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal .modal-actions button {
@@ -252,6 +252,26 @@ button.add, button.spend {
 }
 .modal .btn-cancel { background: #eee; color: #555; }
 .modal .btn-confirm { background: #4a90d9; color: white; }
+
+.qr-container {
+  margin: 15px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.qr-container img {
+  width: 180px;
+  height: 180px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  padding: 8px;
+}
+.qr-price-display {
+  font-size: 22px;
+  font-weight: bold;
+  color: #27ae60;
+  margin-top: 10px;
+}
 </style>
 </head>
 
@@ -346,6 +366,34 @@ button.add, button.spend {
   </div>
 </div>
 
+<!-- ===== MULTI-CURRENCY QR PAYMENT MODAL ===== -->
+<div class="modal-overlay" id="qrModalOverlay">
+  <div class="modal">
+    <h3>Upgrade to Premium</h3>
+    <p style="font-size: 13px; color: #666; margin: 0 0 10px;">Select currency and scan QR to pay</p>
+    
+    <!-- Currency Selector -->
+    <select id="currencySelect" onchange="updateQrCode()">
+      <option value="INR">INR (₹500)</option>
+      <option value="USD">USD ($5.99)</option>
+      <option value="EUR">EUR (€5.50)</option>
+      <option value="GBP">GBP (£4.80)</option>
+    </select>
+
+    <div class="qr-container">
+      <img id="qrImage" src="" alt="Payment QR Code">
+      <div class="qr-price-display" id="qrPriceDisplay">₹500</div>
+    </div>
+
+    <input type="text" id="txRefInput" placeholder="Enter Transaction ID / Ref No after paying">
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeQrModal()">Close</button>
+      <button class="btn-confirm" onclick="submitQrPayment()">Submit & Upgrade</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===== FIREBASE INITIALIZATION =====
 const firebaseConfig = {
@@ -366,7 +414,17 @@ const db = firebase.firestore();
 let currentUser = null;
 let currentWalletId = null;
 
-// Listen for Firebase Auth State Changes
+// Multi-currency price mapping (Base INR 500)
+const pricing = {
+  INR: { symbol: "₹", amount: 500 },
+  USD: { symbol: "$", amount: 5.99 },
+  EUR: { symbol: "€", amount: 5.50 },
+  GBP: { symbol: "£", amount: 4.80 }
+};
+
+// Replace with your real UPI ID or payment link recipient address
+const merchantUPI = "yourname@okaxis"; 
+
 auth.onAuthStateChanged((user) => {
   if (user) {
     currentUser = user.uid;
@@ -376,6 +434,49 @@ auth.onAuthStateChanged((user) => {
     showScreen("authScreen");
   }
 });
+
+// ===== DYNAMIC MULTI-CURRENCY QR CODE GENERATOR =====
+function updateQrCode() {
+  const selectedCurr = document.getElementById("currencySelect").value;
+  const item = pricing[selectedCurr];
+
+  document.getElementById("qrPriceDisplay").innerText = `${item.symbol}${item.amount}`;
+
+  // Build Payment Link string
+  let paymentPayload = `upi://pay?pa=${merchantUPI}&pn=MyWalletApp&am=${item.amount}&cu=${selectedCurr}`;
+
+  // Generate dynamic QR Code image via QRServer API
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentPayload)}`;
+  document.getElementById("qrImage").src = qrApiUrl;
+}
+
+function openQrModal() {
+  updateQrCode();
+  document.getElementById("qrModalOverlay").style.display = "flex";
+}
+
+function closeQrModal() {
+  document.getElementById("qrModalOverlay").style.display = "none";
+}
+
+async function submitQrPayment() {
+  let refId = document.getElementById("txRefInput").value.trim();
+  if (!refId) {
+    alert("Please enter the Transaction ID / Ref Number from your payment app.");
+    return;
+  }
+
+  // Save the verification request and upgrade the user in Firestore
+  await db.collection("users").doc(currentUser).set({
+    isPremium: true,
+    upgradedAt: Date.now(),
+    paymentRef: refId
+  }, { merge: true });
+
+  alert("Payment details submitted! Your account has been upgraded to Premium.");
+  closeQrModal();
+  renderDashboard();
+}
 
 // ===== CLOUD STORAGE HELPERS (FIRESTORE) =====
 async function getWallets() {
@@ -407,23 +508,10 @@ async function deleteWalletFromCloud() {
   showDashboard();
 }
 
-// ===== FREEMIUM HELPERS =====
 async function isUserPremium() {
   if (!currentUser) return false;
   let userSnap = await db.collection("users").doc(currentUser).get();
   return userSnap.exists && userSnap.data().isPremium === true;
-}
-
-async function upgradeAccount() {
-  if (!currentUser) return;
-  if (confirm("Would you like to upgrade to Premium to unlock unlimited wallets?")) {
-    await db.collection("users").doc(currentUser).set({
-      isPremium: true,
-      upgradedAt: Date.now()
-    }, { merge: true });
-    alert("Congratulations! You are now a Premium member.");
-    renderDashboard();
-  }
 }
 
 // ===== AUTH (FIREBASE) =====
@@ -508,7 +596,6 @@ async function renderDashboard() {
   let upgradeBtn = document.getElementById("upgradeBtn");
   grid.innerHTML = "";
 
-  // Check premium status to toggle UI elements
   let premium = await isUserPremium();
   if (premium) {
     upgradeBtn.innerText = "⭐ Premium Active";
@@ -727,10 +814,9 @@ async function openNewWalletModal() {
   let wallets = await getWallets();
   let premium = await isUserPremium();
 
-  // Freemium limit enforcement: Free users get 1 wallet maximum
   if (!premium && wallets.length >= 1) {
-    if (confirm("Free accounts are limited to 1 wallet. Would you like to upgrade to Premium for unlimited wallets?")) {
-      upgradeAccount();
+    if (confirm("Free accounts are limited to 1 wallet. Would you like to upgrade to Premium via QR payment?")) {
+      openQrModal();
     }
     return;
   }
@@ -760,16 +846,19 @@ async function createWallet() {
   renderDashboard();
 }
 
-// Close modal on overlay click
+// Close modals on overlay click
 document.getElementById("modalOverlay").addEventListener("click", function(e) {
   if (e.target === this) closeModal();
+});
+document.getElementById("qrModalOverlay").addEventListener("click", function(e) {
+  if (e.target === this) closeQrModal();
 });
 
 // ===== EVENT LISTENERS =====
 document.getElementById("regBtn").addEventListener("click", register);
 document.getElementById("loginBtn").addEventListener("click", login);
 document.getElementById("logoutBtn").addEventListener("click", logout);
-document.getElementById("upgradeBtn").addEventListener("click", upgradeAccount);
+document.getElementById("upgradeBtn").addEventListener("click", openQrModal);
 document.getElementById("showLoginLink").addEventListener("click", showLogin);
 document.getElementById("showRegisterLink").addEventListener("click", showRegister);
 document.getElementById("backBtn").addEventListener("click", showDashboard);
