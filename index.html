@@ -1,3 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta name="google-site-verification" content="SrXS1v4b-5MJ2oMoRjvhL0KPebVj-raIReYDgoa2CRk" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ffffff">
+<title>My Wallet</title>
+
+<!-- ===== FIREBASE SDK (Compat Version) ===== -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: #f4f5f7;
+}
+
+/* ===== AUTH SCREEN ===== */
+.auth-screen {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: auto;
+  background: white;
+  padding: 40px 25px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.auth-screen h1 { text-align: center; font-size: 28px; margin-bottom: 5px; }
+.auth-screen .subtitle { text-align: center; color: #777; margin-bottom: 30px; }
+.auth-screen input {
+  width: 100%; padding: 14px 16px; border: 1px solid #ddd;
+  border-radius: 12px; font-size: 16px; outline: none; margin-top: 10px;
+}
+.auth-screen button {
+  width: 100%; padding: 16px; margin-top: 14px; border: none;
+  border-radius: 12px; font-size: 17px; font-weight: 600;
+  cursor: pointer; background: #4a90d9; color: white;
+}
+.auth-screen .switch-link { text-align: center; margin-top: 18px; font-size: 14px; color: #777; }
+.auth-screen .switch-link a { color: #4a90d9; cursor: pointer; text-decoration: underline; }
+.auth-error { color: #e74c3c; font-size: 13px; margin-top: 8px; text-align: center; }
+
+/* ===== DASHBOARD ===== */
+.dashboard {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: auto;
+  background: white;
+  padding: 25px 20px;
+  display: none;
+  position: relative;
+  padding-bottom: 90px;
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.dash-header h1 { margin: 0; font-size: 24px; }
+
+.logout-btn {
+  background: #f8dddd; color: #5c1414; padding: 8px 14px;
+  font-size: 13px; border-radius: 8px; cursor: pointer; border: none;
+}
+
+.total-balance-card {
+  background: #f0f2f5; border-radius: 16px; padding: 20px;
+  text-align: center; margin-bottom: 25px;
+}
+
+.total-balance-card .label { font-size: 14px; color: #777; }
+.total-balance-card .amount { font-size: 36px; font-weight: bold; margin-top: 6px; }
+
+.wallet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.wallet-card {
+  background: #f8f9fa; border-radius: 14px; padding: 18px 14px;
+  cursor: pointer; border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.wallet-card:hover { border-color: #4a90d9; }
+.wallet-card .w-name { font-weight: 600; font-size: 15px; color: #333; }
+.wallet-card .w-balance { font-size: 20px; font-weight: bold; margin-top: 8px; }
+.wallet-card .w-tx-count { font-size: 12px; color: #999; margin-top: 6px; }
+
+.empty-dash {
+  text-align: center; color: #888; padding: 40px 20px; font-size: 15px;
+}
+
+/* ===== FAB (floating action button) ===== */
+.fab {
+  position: fixed;
+  bottom: 30px;
+  right: calc(50% - 180px);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4a90d9;
+  color: white;
+  font-size: 32px;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  display: none;
+  z-index: 100;
+}
+
+@media (max-width: 480px) {
+  .fab { right: 20px; }
+}
+
+/* ===== WALLET DETAIL ===== */
+.wallet-detail {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: auto;
+  background: white;
+  padding: 25px 20px;
+  display: none;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.back-btn {
+  background: none; border: none; font-size: 15px;
+  cursor: pointer; color: #4a90d9; font-weight: 600; padding: 5px 0;
+}
+
+.detail-header h2 { margin: 0; font-size: 18px; }
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.delete-wallet-btn {
+  background: #f8dddd; color: #5c1414; padding: 6px 10px;
+  font-size: 11px; border-radius: 8px; cursor: pointer; border: none;
+  font-weight: 600;
+}
+
+.balance-card {
+  margin-top: 20px; padding: 25px 20px; border-radius: 20px;
+  text-align: center; background: #f0f2f5;
+}
+.balance-label { font-size: 15px; color: #777; }
+.balance { font-size: 40px; font-weight: bold; margin-top: 8px; }
+
+.input-group { margin-top: 20px; }
+.input-group input {
+  width: 100%; padding: 14px 16px; border: 1px solid #ddd;
+  border-radius: 12px; font-size: 16px; outline: none; margin-top: 8px;
+}
+
+button.add, button.spend {
+  width: 100%; padding: 16px; margin-top: 10px; border: none;
+  border-radius: 12px; font-size: 17px; font-weight: 600; cursor: pointer;
+}
+.add { background: #dff5e5; color: #135222; }
+.spend { background: #f8dddd; color: #5c1414; }
+
+.transactions { margin-top: 30px; }
+.transactions h2 { font-size: 18px; }
+
+.transaction {
+  display: flex; justify-content: space-between;
+  align-items: center; padding: 12px 5px; border-bottom: 1px solid #eee;
+}
+.transaction-info { display: flex; flex-direction: column; gap: 3px; max-width: 55%; }
+.transaction-note { font-weight: 500; font-size: 15px; color: #333; word-break: break-word; }
+.transaction-type { font-size: 12px; color: #888; }
+.transaction-time { font-size: 11px; color: #aaa; }
+.added { color: #27ae60; font-weight: 600; }
+.spent { color: #e74c3c; font-weight: 600; }
+.empty { color: #888; text-align: center; padding: 20px; }
+
+.tx-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tx-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.tx-btn {
+  background: #f1f5f9; border: none; padding: 5px 8px; border-radius: 6px;
+  font-size: 11px; cursor: pointer; font-weight: 600; color: #475569;
+}
+.tx-btn:hover { background: #e2e8f0; }
+.tx-delete-btn { color: #991b1b; background: #fee2e2; }
+.tx-delete-btn:hover { background: #fecaca; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); display: none;
+  justify-content: center; align-items: center; z-index: 200;
+}
+
+.modal {
+  background: white; border-radius: 16px; padding: 28px 24px;
+  width: 90%; max-width: 340px;
+}
+
+.modal h3 { margin: 0 0 16px; font-size: 18px; }
+.modal input {
+  width: 100%; padding: 13px 15px; border: 1px solid #ddd;
+  border-radius: 10px; font-size: 16px; outline: none;
+}
+.modal .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+.modal .modal-actions button {
+  flex: 1; padding: 13px; border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.modal .btn-cancel { background: #eee; color: #555; }
+.modal .btn-confirm { background: #4a90d9; color: white; }
+</style>
+</head>
+
+<body>
+
+<!-- ===== AUTH ===== -->
+<div class="auth-screen" id="authScreen">
+  <h1>MY WALLET</h1>
+  <div class="subtitle">Personal Money Manager</div>
+
+  <div id="registerForm">
+    <input type="text" id="regUsername" placeholder="Choose a username">
+    <input type="password" id="regPin" placeholder="Choose a 6-digit PIN">
+    <button id="regBtn">Create Account</button>
+    <div class="auth-error" id="regError"></div>
+    <div class="switch-link">Already have an account? <a id="showLoginLink">Login</a></div>
+  </div>
+
+  <div id="loginForm" style="display:none;">
+    <input type="text" id="loginUsername" placeholder="Username">
+    <input type="password" id="loginPin" placeholder="PIN">
+    <button id="loginBtn">Login</button>
+    <div class="auth-error" id="loginError"></div>
+    <div class="switch-link">No account? <a id="showRegisterLink">Register</a></div>
+  </div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="dashboard" id="dashboard">
+  <div class="dash-header">
+    <h1>My Wallets</h1>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
+  </div>
+
+  <div class="total-balance-card">
+    <div class="label">Total Balance</div>
+    <div class="amount" id="totalBalance">₹0</div>
+  </div>
+
+  <div class="wallet-grid" id="walletGrid"></div>
+  <div class="empty-dash" id="emptyDash" style="display:none;">
+    No wallets yet. Tap <strong>+</strong> to create one.
+  </div>
+</div>
+
+<!-- ===== WALLET DETAIL ===== -->
+<div class="wallet-detail" id="walletDetail">
+  <div class="detail-header">
+    <button class="back-btn" id="backBtn">← Back</button>
+    <h2 id="walletName"></h2>
+    <div class="header-actions">
+      <button class="delete-wallet-btn" id="deleteWalletBtn">Delete</button>
+    </div>
+  </div>
+
+  <div class="balance-card">
+    <div class="balance-label">Available Balance</div>
+    <div class="balance" id="balance">₹0</div>
+  </div>
+
+  <div class="input-group">
+    <input type="number" id="amount" placeholder="Enter amount">
+    <input type="text" id="note" placeholder="Enter note (e.g., Grocery, Salary)">
+  </div>
+
+  <button class="add" id="addMoneyBtn">+ Add Money</button>
+  <button class="spend" id="spendMoneyBtn">− Spend Money</button>
+
+  <div class="transactions">
+    <h2>Transactions</h2>
+    <div id="transactionList">
+      <div class="empty">No transactions yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FAB ===== -->
+<button class="fab" id="fab">+</button>
+
+<!-- ===== NEW WALLET MODAL ===== -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3>New Wallet</h3>
+    <input type="text" id="newWalletName" placeholder="Wallet name (e.g., Savings, Food)">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelModalBtn">Cancel</button>
+      <button class="btn-confirm" id="confirmModalBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+
 <script>
 // ===== FIREBASE INITIALIZATION =====
 const firebaseConfig = {
